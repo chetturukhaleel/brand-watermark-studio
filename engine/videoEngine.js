@@ -1,5 +1,5 @@
 import { WatermarkEngine } from './watermarkEngine.js';
-import { removeWatermark } from './blendModes.js';
+import { inpaintWatermark } from './blendModes.js';
 import { resolveBox, getRoi, buildAlpha, detectGeminiSparkle } from './tuner.js';
 
 // Defaults that, in practice, make the Veo watermark effectively invisible.
@@ -190,7 +190,7 @@ export class VideoWatermarkEngine {
             }
 
             const px = ctx.getImageData(roi.x, roi.y, roi.width, roi.height);
-            removeWatermark(px, alpha, region);
+            inpaintWatermark(px, alpha, region, { threshold: 0.08, iterations: 140 });
             ctx.putImageData(px, roi.x, roi.y);
 
             await videoSource.add(timestamp, dur);
