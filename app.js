@@ -13,10 +13,10 @@ async function removeVideoWatermark(file){
   if(!videoEnginePromise){videoEnginePromise=import('./engine/videoEngine.js').then(m=>m.VideoWatermarkEngine.create())}
   const engine=await videoEnginePromise;
   if(!engine.constructor.isSupported())throw Error('This browser does not expose WebCodecs video decoding/encoding. Try an updated Chrome browser.');
-  const gain=1, sizeScale=1;
-  const offsetX=0, offsetY=0;
-  $('removeStatus').textContent='Processing video frame by frame. Keep this page open…';
-  const result=await engine.process(file,{gain,sizeScale,offsetX,offsetY,onProgress:({progress})=>{$('removeStatus').textContent='Cleaning video… '+Math.round(progress*100)+'%'}});
+  $('removeStatus').textContent='Detecting the visible sparkle and processing video frame by frame. Keep this page open…';
+  // Use the engine's calibrated Veo alpha strength (0.6). Do not override it
+  // with gain=1: that diverges from the upstream removal calibration.
+  const result=await engine.process(file,{onProgress:({progress,stage})=>{$('removeStatus').textContent=stage==='detecting'?'Detecting Gemini sparkle…':'Cleaning video… '+Math.round(progress*100)+'%'}});
   $('afterVideo').src=result.url;
   $('afterVideoWrap').classList.remove('hidden');
   $('downloadClean').href=result.url;
