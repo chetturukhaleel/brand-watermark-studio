@@ -34,7 +34,7 @@ export class VideoWatermarkEngine {
     }
 
     async _lib() {
-        if (!this._mb) this._mb = await import('mediabunny');
+        if (!this._mb) this._mb = await import('https://esm.sh/mediabunny@1.49.0');
         return this._mb;
     }
 
