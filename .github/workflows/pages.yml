@@ -1,4 +1,5 @@
 name: Deploy Brand Watermark Studio to GitHub Pages
+# Keep each deployment on a fresh workflow run; do not rerun a run that already uploaded artifacts.
 on:
   push:
     branches: [main]
