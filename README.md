@@ -19,3 +19,21 @@ Enable GitHub Pages from Settings → Pages → Deploy from a branch → main �
 
 ## License
 The UI and application glue are provided under MIT. The two Gemini sparkle reference masks are copied from the MIT-licensed upstream project linked above.
+
+
+## Video removal engine and attribution
+
+Video cleanup uses a browser-side WebCodecs pipeline based on the MIT-licensed
+GargantuaX Gemini watermark-remover engine approach (decode frames, reverse-alpha
+cleanup, then MP4 re-encode with best-effort audio passthrough). The adapted engine
+source is in `engine/`; see `VIDEO-ENGINE-LICENSE` for the required copyright
+notice and license text.
+
+Mediabunny is loaded at runtime from esm.sh (version 1.49.0) for browser-side
+container decoding and encoding. The media file itself is processed locally and
+is not uploaded to a processing server. A network connection is needed to load
+the library the first time.
+
+Video removal is intended for the visible Gemini/Veo sparkle only. It does not
+remove invisible SynthID. WebCodecs/H.264 availability and memory limits vary by
+browser and device; test with a short clip first. Output audio is best-effort.
