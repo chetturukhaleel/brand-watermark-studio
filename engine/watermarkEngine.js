@@ -19,8 +19,8 @@ export class WatermarkEngine {
 
         try {
             const [bg48, bg96] = await Promise.all([
-                loadImage(new URL('../../assets/bg_48.png', import.meta.url).href),
-                loadImage(new URL('../../assets/bg_96.png', import.meta.url).href)
+                loadImage(new URL('../assets/bg_48.png', import.meta.url).href),
+                loadImage(new URL('../assets/bg_96.png', import.meta.url).href)
             ]);
             return new WatermarkEngine(bg48, bg96);
         } catch (e) {
