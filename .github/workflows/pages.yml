@@ -29,6 +29,9 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
+      # Give the Actions artifact service time to index the freshly uploaded Pages artifact.
+      - name: Wait for Pages artifact indexing
+        run: sleep 12
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
