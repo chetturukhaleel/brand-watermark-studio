@@ -68,7 +68,7 @@ export function cleanFrame(bgImg, imageData, width, height, base, opts = {}) {
  * This scans the whole frame and estimates both location and scale.
  */
 export function detectGeminiSparkle(imageData, width, height, templateImage) {
-    const sampleSize = 12;
+    const sampleSize = 16;
     const templateCanvas = document.createElement('canvas');
     templateCanvas.width = templateCanvas.height = sampleSize;
     const templateCtx = templateCanvas.getContext('2d', { willReadFrequently: true });
@@ -82,41 +82,74 @@ export function detectGeminiSparkle(imageData, width, height, templateImage) {
     }
     tm /= pattern.length;
     let tv = 0;
+    let patternSum = 0;
     for (let i = 0; i < pattern.length; i++) {
         pattern[i] -= tm;
         tv += pattern[i] * pattern[i];
+        patternSum += pattern[i];
     }
     if (tv < 0.001) return null;
 
     const pixels = imageData.data;
+    const minSide = Math.min(width, height);
     const candidates = [0.018, 0.022, 0.027, 0.032, 0.04, 0.05, 0.065, 0.08, 0.10];
+    const scoreAt = (x, y, size) => {
+        if (x < 0 || y < 0 || x + size > width || y + size > height) return -1;
+        let mean = 0, sumSq = 0, dot = 0;
+        for (let sy = 0; sy < sampleSize; sy++) {
+            const py = y + Math.min(size - 1, Math.floor((sy + 0.5) * size / sampleSize));
+            for (let sx = 0; sx < sampleSize; sx++) {
+                const px = x + Math.min(size - 1, Math.floor((sx + 0.5) * size / sampleSize));
+                const idx = (py * width + px) * 4;
+                const lum = (pixels[idx] * 0.2126 + pixels[idx + 1] * 0.7152 + pixels[idx + 2] * 0.0722) / 255;
+                const k = sy * sampleSize + sx;
+                mean += lum;
+                sumSq += lum * lum;
+                dot += pattern[k] * lum;
+            }
+        }
+        mean /= pattern.length;
+        const variance = Math.max(0.00001, sumSq - pattern.length * mean * mean);
+        return (dot - mean * patternSum) / Math.sqrt(tv * variance);
+    };
+
     let best = null;
     for (const ratio of candidates) {
-        const size = Math.round(Math.min(width, height) * ratio);
-        if (size < 16 || size > Math.min(width, height) * 0.18) continue;
+        const size = Math.round(minSide * ratio);
+        if (size < 16 || size > minSide * 0.18) continue;
         const step = Math.max(4, Math.floor(size / 3));
         for (let y = 0; y <= height - size; y += step) {
             for (let x = 0; x <= width - size; x += step) {
-                let mean = 0, sum = 0, sumSq = 0, dot = 0;
-                for (let sy = 0; sy < sampleSize; sy++) {
-                    const py = y + Math.min(size - 1, Math.floor((sy + 0.5) * size / sampleSize));
-                    for (let sx = 0; sx < sampleSize; sx++) {
-                        const px = x + Math.min(size - 1, Math.floor((sx + 0.5) * size / sampleSize));
-                        const idx = (py * width + px) * 4;
-                        const lum = (pixels[idx] * 0.2126 + pixels[idx + 1] * 0.7152 + pixels[idx + 2] * 0.0722) / 255;
-                        const k = sy * sampleSize + sx;
-                        mean += lum;
-                        sumSq += lum * lum;
-                        dot += pattern[k] * lum;
-                    }
-                }
-                mean /= pattern.length;
-                const variance = Math.max(0.00001, sumSq - pattern.length * mean * mean);
-                const score = (dot - mean * pattern.reduce((a, b) => a + b, 0)) / Math.sqrt(tv * variance);
-                if (!best || score > best.score) best = { x, y, size, score };
+                const score = scoreAt(x, y, size);
+                if (!best || score > best.score) best = { x, y, size, score, coarseStep: step };
             }
         }
     }
-    if (!best || best.score < 0.24) return null;
-    return { x: best.x, y: best.y, size: best.size, width: best.size, height: best.size, confidence: best.score };
+    if (!best) return null;
+
+    // The coarse pass finds the region. Refine position and scale at single-pixel
+    // precision so the reverse-alpha mask aligns with the actual sparkle edges.
+    const coarse = best;
+    const minSize = Math.max(16, coarse.size - Math.max(3, Math.round(coarse.size * 0.12)));
+    const maxSize = Math.min(Math.floor(minSide * 0.18), coarse.size + Math.max(3, Math.round(coarse.size * 0.12)));
+    let refined = null;
+    for (let size = minSize; size <= maxSize; size++) {
+        const radius = Math.max(coarse.coarseStep, Math.round(size * 0.18));
+        const left = Math.max(0, coarse.x - radius);
+        const top = Math.max(0, coarse.y - radius);
+        const right = Math.min(width - size, coarse.x + radius);
+        const bottom = Math.min(height - size, coarse.y + radius);
+        for (let y = top; y <= bottom; y++) {
+            for (let x = left; x <= right; x++) {
+                const score = scoreAt(x, y, size);
+                if (!refined || score > refined.score) refined = { x, y, size, score };
+            }
+        }
+    }
+    const match = refined || coarse;
+    if (match.score < 0.24) return null;
+    return {
+        x: match.x, y: match.y, size: match.size,
+        width: match.size, height: match.size, confidence: match.score
+    };
 }
