@@ -1,6 +1,6 @@
 import { WatermarkEngine } from './watermarkEngine.js';
 import { removeWatermark } from './blendModes.js';
-import { resolveBox, getRoi, buildAlpha, cleanFrame } from './tuner.js';
+import { resolveBox, getRoi, buildAlpha, detectGeminiSparkle } from './tuner.js';
 
 // Defaults that, in practice, make the Veo watermark effectively invisible.
 export const VIDEO_DEFAULTS = { gain: 0.6, offsetX: -24, offsetY: -24, sizeScale: 1 };
@@ -111,11 +111,9 @@ export class VideoWatermarkEngine {
             if (stats?.averagePacketRate) frameRate = Math.round(stats.averagePacketRate);
         } catch { /* keep default */ }
 
-        const base = this.getVeoWatermark(width, height);
-        const wm = resolveBox(base, width, height, opts);
-        const roi = getRoi(width, height, wm);
-        const alpha = buildAlpha(this.engine.bg96, roi, wm, gain);
-        const region = { x: 0, y: 0, width: roi.width, height: roi.height };
+        const base = null; // detected from the first decoded frame below
+        let wm = null, roi = null, alpha = null;
+        const region = { x: 0, y: 0, width: 0, height: 0 };
 
         const canvas =
             typeof OffscreenCanvas !== 'undefined'
@@ -155,9 +153,14 @@ export class VideoWatermarkEngine {
 
         const fallbackDur = frameRate > 0 ? 1 / frameRate : 1 / 30;
         const sink = new VideoSampleSink(videoTrack);
+        const iterator = sink.samples()[Symbol.asyncIterator]();
         let firstTimestamp = null;
         let lastTimestamp = -1;
-        for await (const sample of sink.samples()) {
+        let detected = false;
+        while (true) {
+            const next = await iterator.next();
+            if (next.done) break;
+            const sample = next.value;
             if (firstTimestamp === null) firstTimestamp = sample.timestamp;
             let timestamp = sample.timestamp - firstTimestamp;
             if (!(timestamp >= 0)) timestamp = 0;
@@ -170,6 +173,21 @@ export class VideoWatermarkEngine {
 
             sample.draw(ctx, 0, 0, width, height);
             sample.close();
+
+            if (!detected) {
+                onProgress({ progress: 0.01, stage: 'detecting' });
+                const firstFrame = ctx.getImageData(0, 0, width, height);
+                const match = detectGeminiSparkle(firstFrame, width, height, this.engine.bg96);
+                if (!match) {
+                    throw new Error('Could not confidently detect a Gemini sparkle in this video. No watermark was removed. Try a clearer frame where the sparkle is visible.');
+                }
+                wm = match;
+                roi = getRoi(width, height, wm);
+                alpha = buildAlpha(this.engine.bg96, roi, wm, gain);
+                region.x = 0; region.y = 0; region.width = roi.width; region.height = roi.height;
+                detected = true;
+                console.info('Gemini sparkle detected:', { x: wm.x, y: wm.y, size: wm.size, confidence: wm.confidence });
+            }
 
             const px = ctx.getImageData(roi.x, roi.y, roi.width, roi.height);
             removeWatermark(px, alpha, region);
