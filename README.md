@@ -37,3 +37,8 @@ the library the first time.
 Video removal is intended for the visible Gemini/Veo sparkle only. It does not
 remove invisible SynthID. WebCodecs/H.264 availability and memory limits vary by
 browser and device; test with a short clip first. Output audio is best-effort.
+
+
+## Video removal engine attribution
+
+The frame-by-frame Gemini Veo video removal engine in `engine/` is adapted from [dearabhin/gemini-watermark-remover](https://github.com/dearabhin/gemini-watermark-remover), Copyright Abhin Krishna, licensed under the MIT License. The upstream engine uses Mediabunny and browser WebCodecs for local MP4 processing. This project dynamically loads Mediabunny from esm.sh; video support depends on browser codec availability and memory. No media is uploaded by the app.
